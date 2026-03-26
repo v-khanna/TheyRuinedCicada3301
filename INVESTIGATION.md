@@ -551,16 +551,44 @@ Also tried: `/api/auth`, `/api/puzzle`, `/api/next`, `/api/decrypt`, `/api/verif
 
 ---
 
-## Open Questions / Next Steps
+## Phase 25: Source Code Discovery (github.com/itsfabioroma/impossibl)
 
-1. **Barcode appeared today (March 25), hackathon was yesterday (March 24).** Is this a post-event puzzle? A new phase? Or cleanup marketing?
-2. **r/impossibl is banned.** Whatever content was there is lost. Was it PGP-encrypted messages that needed the key we found?
-3. **invite_token has no known endpoint.** Could it be for Discord, Slack, Telegram, or a different service entirely?
-4. **PGP key notation `manu=2,2.5+1.12,0,3`** is undecoded. This is metadata deliberately embedded in the key.
-5. **The physical barcode itself** could contain steganographic data beyond the URL. A photo of it would be useful to analyze.
-6. **API rate limit may reset** - worth retrying the POST with different payloads once it resets.
-7. **Who runs Ultracontext?** Very low public presence - may be a new/stealth startup.
-8. **The `[0]` in the PGP user ID** (`impossibl[0]`) - suggests there may be keys `[1]`, `[2]`, etc. for different puzzle stages.
+Fabio Roma's entire source code is public at `github.com/itsfabioroma/impossibl`. This revealed everything we missed.
+
+### The Token Goes to `/portal`
+
+We tried `/invite/{token}`, `/api/invite`, bearer auth, and a dozen other patterns but never tried `/portal`. The page shows a blank cursor. You paste your invite_token, it validates against Supabase, assigns you a builder number, generates `sha256(token).slice(0, 16)` as your hash, and plays a typewriter animation ending with a registration form (name, email, phone, telegram, github). That's the hackathon sign-up. That's what this whole thing was for.
+
+### Server-Side Logic
+
+- POST to the API extracts your IP + geo data, rate-limits at 3 per IP, generates a `randomUUID()`, stores it in a `impossibl_tokens` Supabase table
+- The PGP key is just an env var (`IMPOSSIBL_PGP_KEY`) served in the response. No encrypted messages exist to decrypt with it. It's decoration.
+- Portal validation does `sha256(token).slice(0, 16)` for your "hash"
+- When the event fills up: "impossibl[0] is full. you're on the list. impossibl[1] awaits."
+
+### Other Hidden Pages
+
+- **`/0/submit`** - Hackathon project submission (description + GitHub URL)
+- **`/h`** and **`/h/{hash}`** - Hash verification / builder profile pages
+- **`/map`** - Password-protected Google Maps tracking poster locations with 5 variants: Cicada (red), Foguete (blue), High Line (green), Find your way (orange), Sticker (purple). Multiple posters exist across SF.
+- **`/dasha`** - Unrelated AI chatbot for a podcast called "Talks With Dasha" using Claude + RAG
+- **`wasm/cicada.c`** - The WASM is just a wing-flap animation engine for the ASCII art. Written in freestanding C. Not a puzzle.
+
+### Resolved Questions
+
+| Question | Answer |
+|----------|--------|
+| Where does the invite_token go? | `/portal` - hackathon registration |
+| What does `[0]` mean? | Event number, not puzzle stages |
+| What's the WASM? | Wing animation, not a puzzle |
+| What's the PGP key for? | Decoration. An env var served in the response. |
+| What was on r/impossibl? | Unknown. The actual flow is poster → /0 → API → /portal. Reddit was likely secondary or a red herring. |
+
+### Still Unsolved
+
+1. **PGP key notation `manu=2,2.5+1.12,0,3`** - Not referenced anywhere in the source code. Still undecoded.
+2. **r/impossibl content** - Banned, no archive.
+3. **`pins.json`** - Exact locations of all poster variants across SF.
 
 ---
 
@@ -575,5 +603,6 @@ Also tried: `/api/auth`, `/api/puzzle`, `/api/next`, `/api/decrypt`, `/api/verif
 - Original Cicada 3301 went dark in ~2014
 - Uses modern web tech (Next.js/React/Turbopack) vs Cicada's minimalist approach
 - Cicada always signed their messages cryptographically - this site has zero signed content
+- The PGP key is an environment variable. The "cryptography" is hex and base64. The entire thing is a sign-up funnel.
 
-**What it actually is:** A hackathon marketing stunt that rips off Cicada 3301's aesthetic and wraps it around Ayn Rand quotes and beginner-level encoding. The honeypot at `/0/0x7A5` is the only mildly interesting design choice - the rest is hex encoding and base64, which is not cryptography by any serious standard.
+**What it actually is:** A hackathon registration funnel wearing Cicada 3301's skin. The source code confirms it - the endpoint of the puzzle is a form asking for your name, email, and GitHub. Every layer of mystery exists to make you feel special about filling out a sign-up form.
