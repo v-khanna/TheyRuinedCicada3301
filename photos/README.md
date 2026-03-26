@@ -20,11 +20,11 @@ Evidence collected during the investigation on March 25, 2026.
 4. **`Cicada3301posterchatwithfounderultracontext1.jpeg`** - LinkedIn DMs (part 1)
    - Manav messages Fabio Roma (Founder @ UltraContext)
    - Fabio's response: "How did you find me?"
-   - Found in 6 minutes. Some mystery.
+
 
 5. **`Cicada3301posterchatwithfounderultracontext2.jpeg`** - LinkedIn DMs (part 2)
    - Fabio confirms: "It was a hackaton yesterday"
-   - The whole thing reduced to a one-line admission
+   - Confirms the hackathon connection
 
 6. **`ScreenshotCensored.png`** - The /portal page after successfully using the invite_token
    - Shows: "you're in. congratulations, you're impossibl[0][22]"
