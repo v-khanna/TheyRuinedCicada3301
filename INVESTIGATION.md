@@ -1,152 +1,85 @@
-# Impossibl ARG Investigation
+# Impossibl Puzzle Investigation
 
-**Date:** 2026-03-25
-**Investigators:** Manav and I
-**Entry Point:** Physical barcode -> `https://impossibl.com/0`
-**Status:** Complete - puzzle fully solved, registration completed as impossibl[0][22]
-
----
-
-## TL;DR
-
-A Cicada 3301-style poster near the Caltrain station in SF leads to `impossibl.com/0`, a multi-layered puzzle site. We cracked every layer, extracted a PGP key and invite token, used the token to register at `/portal`, and confirmed the organizer (Fabio Roma, Founder @ UltraContext) via LinkedIn. It's a hackathon marketing funnel disguised as an internet mystery. We also found the entire source code on GitHub.
+**Date:** 2026-03-25 / 2026-03-26
+**Investigators:** Vir, Manav
+**Entry Point:** Physical poster with QR code near 4th & King Caltrain station, SF
+**Status:** Active — book cipher unsolved
 
 ---
 
-## Methodology: Exactly What We Did
+## Summary
 
-### Phase 1: Initial Recon (Web Fetching)
+A Cicada 3301-style poster near the Caltrain station in San Francisco leads to `impossibl.com/0`, a multi-layered puzzle site. We solved the full puzzle chain, extracted a PGP key and invite token, registered at `/portal`, and identified the organizer as Fabio Roma (Founder @ UltraContext) via LinkedIn. The source code is public at `github.com/itsfabioroma/impossibl`. Phase 2 analysis of the source revealed additional layers, and Phase 3 analysis of git history recovered a removed book cipher layer — the deepest and only unsolved component of the puzzle.
 
-**What we did:** Fetched `impossibl.com/0` and `impossibl.com/0/0x7A5` using the WebFetch tool, which downloads a URL and extracts content.
+---
 
-**Why:** To see what was on the pages the user found via barcode and in the HTML source screenshot they shared.
+## Phase 1: Puzzle Chain (Layers 1–7)
 
-**What we found:**
-- `/0` shows "We are looking for those who see what others don't." - minimal, mysterious landing page
-- `/0/0x7A5` shows "You're not who we're looking for. Give up." - appeared to be a rejection page
-- The user's screenshot of Chrome DevTools showed HTML comments with Atlas Shrugged quotes and the path `impossibl.com/0/0x7A5`
+### Phase 1.1: Initial Recon
 
-**Key observation:** The HTML comments are NOT in the static HTML - they're injected by client-side JavaScript. This meant the real puzzle logic lives in the JS source code, which led us to the breakthrough.
+Fetched `impossibl.com/0` and `impossibl.com/0/0x7A5`.
 
-### Phase 2: Identifying the Site's True Nature
+- `/0` — minimal landing page: "We are looking for those who see what others don't."
+- `/0/0x7A5` — rejection page: "You're not who we're looking for. Give up."
+- Chrome DevTools showed HTML comments with Atlas Shrugged quotes and the path to `/0/0x7A5`
 
-**What we did:** Fetched the root domain `impossibl.com` (without `/0`).
+The HTML comments are injected by client-side JavaScript via `document.createComment()`, not present in the static HTML. This meant the puzzle logic lives in the JS bundles.
 
-**Why:** To understand what the site actually is, beyond the puzzle page.
+### Phase 1.2: Site Identification
 
-**What we found:** The root page reveals this is **"Impossibl @ SF, March 24"** - a hackathon in San Francisco. The meta description says "A hackathon in San Francisco, March 24." It links to two sponsors: Ultracontext (ultracontext.ai) and Firecrawl (firecrawl.dev).
+The root domain `impossibl.com` reveals this is a hackathon: "Impossibl @ SF, March 24." Sponsors listed: Ultracontext (ultracontext.ai) and Firecrawl (firecrawl.dev).
 
-**Conclusion:** This is NOT real Cicada 3301. It's a hackathon ARG using Cicada aesthetics.
+### Phase 1.3: Path Enumeration
 
-### Phase 3: Broad Path Enumeration
+Tried ~20 URL paths including standard paths (`/robots.txt`, `/sitemap.xml`, `/pgp`, `/key`), numeric paths (`/1`, `/0/1`, `/0/3301`), hex paths (`/0/0x1`, `/0/0xCE5`), and thematic paths (`/0/puzzle`, `/0/motor`). All returned 404 except the two known pages.
 
-**What we did:** Tried ~20 different URL paths on the site to find hidden pages.
+### Phase 1.4: Infrastructure Analysis
 
-**Why:** Puzzle sites often hide content at non-obvious paths. We tried:
-- Standard paths: `/robots.txt`, `/sitemap.xml`, `/pgp`, `/key`, `/api`, `/apply`, `/whoami`
-- Numeric paths: `/1`, `/0/1`, `/0/3301`, `/0/1957`
-- Hex-themed paths: `/0/0x1`, `/0/0xCE5` (3301 in hex), `/0/0xCE4`
-- Thematic paths: `/0/puzzle`, `/0/motor` (from the quote "I have stopped your motor")
-- `/3301` (direct Cicada reference)
+| Component | Detail |
+|-----------|--------|
+| Hosting | Vercel, SFO region, IP `216.150.1.1` |
+| SSL | Let's Encrypt, issued 2026-02-28 |
+| DNS MX | Google Workspace |
+| DNS TXT | Google site verification + SPF record |
+| Framework | Next.js with React Server Components |
 
-**What we found:** ALL returned 404 except the two known pages (`/0` and `/0/0x7A5`). The site has a very limited surface area.
+### Phase 1.5: Honeypot Identification
 
-### Phase 4: Infrastructure Analysis
-
-**What we did:** Checked HTTP headers, DNS records, and SSL certificate.
-
-**Why:** Infrastructure details can reveal the operators, hidden services, or additional clues.
-
-**Commands/tools used:**
-- `curl -sI https://impossibl.com/0` - HTTP response headers
-- `dig impossibl.com TXT +short` - DNS TXT records
-- `dig impossibl.com MX +short` - DNS mail records
-
-**What we found:**
-- **Hosting:** Vercel, SFO region, IP `216.150.1.1`
-- **SSL:** Let's Encrypt cert, issued 2026-02-28, expires 2026-05-29
-- **DNS MX:** Google Workspace (they use Gmail for `@impossibl.com`)
-- **DNS TXT:** Google site verification + SPF record
-- **Next.js headers:** `x-matched-path: /0`, confirming route exists as a real page
-- **No hidden DNS TXT clues** (some ARGs hide messages in DNS TXT records)
-
-### Phase 5: Identifying Client-Side Injection
-
-The HTML comments are injected by JavaScript, not present in static HTML. This told us the puzzle logic lives in the JS bundles, not the HTML. We needed to read the actual source code.
-
-### Phase 6: React Server Components Payload
-
-**What we did:** Fetched the RSC (React Server Components) payload by sending `curl -s -H "RSC: 1" https://impossibl.com/0`.
-
-**Why:** Next.js apps serve their component data as a special RSC stream when you send the `RSC: 1` header. This reveals which JavaScript chunks render each page.
-
-**What we found:** The RSC payload maps pages to their JS chunk files:
-- `/0` page loads from chunk `7180e2d3b3f57119.js`
-- `/0/0x7A5` page loads from chunk `03937afc6f801e3a.js`
-- Shared framework code in `2f236954d6a65e12.js` and `1574975e990fbf56.js`
-
-### Phase 7: Reading the Source Code (THE BREAKTHROUGH)
-
-**What we did:** Downloaded the actual JavaScript files for both pages using `curl`.
-
-**Why:** Since the visible content is rendered by client-side JS, the source code would reveal the actual puzzle logic.
-
-**What we found in `7180e2d3b3f57119.js` (the `/0` page):**
-
-1. **ASCII Art:** A large cicada/moth drawn with `@` symbols, rendered on a `<canvas>` element with animated glowing "firefly" effects on random characters.
-
-2. **Comment Injection Code:** A React component that, after mounting, programmatically creates DOM comment nodes and inserts them into the page:
-   ```js
-   let o = [
-     "I have stopped your motor.",
-     "Do not attempt to find us. We do not choose to be found.",
-     "The world you desired can be won, it exists, it is real, it is possible, it's yours.",
-     "impossibl.com/0/0x7A5"
-   ];
-   ```
-   These are injected via `document.createComment()` - designed to be found only by people who open DevTools and inspect the DOM.
-
-3. **THE HIDDEN API CALL:** The most important find. Buried in the component code:
-   ```js
-   fetch("/api/0x6578706c616e6174696f6e73").catch(()=>{})
-   ```
-   The page silently makes a `fetch()` call to `/api/0x6578706c616e6174696f6e73` on load, then discards the result. This is a clue hidden in the network activity. `0x6578706c616e6174696f6e73` decoded from hex = **"explanations"**.
-
-**What we found in `03937afc6f801e3a.js` (the `/0/0x7A5` page):**
-
-Console logging that taunts anyone who followed the comment clue:
-```js
-console.log("Nice try.")
-console.log("You took the bait.")
-console.log("Is that really the deepest you can look?")
+The `/0/0x7A5` page logs to console:
+```
+Nice try.
+You took the bait.
+Is that really the deepest you can look?
 ```
 
-**This confirmed `/0/0x7A5` is a honeypot.** The real path forward was the hidden API endpoint.
+`0x7A5` = 1957 in decimal (publication year of Atlas Shrugged). This page is a deliberately planted false trail.
 
-### Phase 8: Hitting the Hidden API (GET)
+### Phase 1.6: React Server Components Payload
 
-**What we did:** `curl -s https://impossibl.com/api/0x6578706c616e6174696f6e73`
+Used `curl -s -H "RSC: 1" https://impossibl.com/0` to identify JS chunk files:
+- `/0` page: `7180e2d3b3f57119.js`
+- `/0/0x7A5` page: `03937afc6f801e3a.js`
 
-**What we got back:**
-```json
-{"next":"513239755a334a...4c673d3d"}
-```
+### Phase 1.7: Source Code Analysis
 
-A JSON object with a `next` field containing a long hex string.
+Downloaded and analyzed the JS bundles. The `/0` page source revealed:
 
-**Decoding (two layers):**
-1. **Hex decode** the string -> produces Base64 text: `Q29uZ3JhdHVsYXRpb25z...ZHBvaW50Lg==`
-2. **Base64 decode** that -> produces plaintext:
+1. ASCII cicada art rendered on canvas with animated effects
+2. DOM comment injection code (the planted bait)
+3. A silent fetch call: `fetch("/api/0x6578706c616e6174696f6e73").catch(()=>{})`
+
+The hex endpoint name decodes to "explanations." This is the real path forward.
+
+### Phase 1.8: Hidden API — GET
+
+`GET /api/0x6578706c616e6174696f6e73` returned a hex-encoded Base64 string. Decoded:
 
 > "Congratulations. Devotion to the truth is the hallmark of morality; there is no greater, nobler, more heroic form of devotion than the act of a man who assumes the responsibility of thinking. Now POST this same endpoint."
 
-**The instruction:** Send a POST request to the same URL.
+### Phase 1.9: Hidden API — POST
 
-### Phase 9: Hitting the Hidden API (POST) - THE PAYLOAD
+`POST /api/0x6578706c616e6174696f6e73` returned ~4.9KB JSON:
 
-**What we did:** `curl -s -X POST https://impossibl.com/api/0x6578706c616e6174696f6e73`
-
-**What we got back (JSON, ~4.9KB):**
 ```json
 {
   "next": "r/696D706F737369626C",
@@ -155,98 +88,11 @@ A JSON object with a `next` field containing a long hex string.
 }
 ```
 
-**Decoding each field:**
+- `next` → hex decode → `r/impossibl` (Reddit subreddit, currently banned)
+- `invite_token` → UUID for portal registration
+- `decrypt_key` → PGP private key (decorative; source code confirms it's an env var with no encrypted content to decrypt)
 
-1. **`next`:** The prefix `r/` followed by hex `696D706F737369626C`. Hex decode = `impossibl`. So the next step is **`r/impossibl`** - a Reddit subreddit.
-
-2. **`invite_token`:** A UUID `[REDACTED]`. Purpose unknown - possibly for gated access to something.
-
-3. **`decrypt_key`:** A data URI containing a base64-encoded PGP private key. We decoded it and got a full `-----BEGIN PGP PRIVATE KEY BLOCK-----` key for `impossibl[0] <0@impossibl.com>`.
-
-### Phase 10: PGP Key Analysis
-
-**What we did:**
-1. Saved the key to `private_key.asc`
-2. Installed GnuPG via `brew install gnupg`
-3. Imported the key: `gpg --import private_key.asc`
-4. Inspected key packets: `gpg --list-packets private_key.asc`
-
-**Key details:**
-- **User ID:** `impossibl[0] <0@impossibl.com>`
-- **Fingerprint:** `750169CFCF2E0C8572789A60FAD6BE338F5A7FEB`
-- **Key ID:** `FAD6BE338F5A7FEB`
-- **Encryption Subkey:** `E3C689C1BBACEBDA`
-- **Algorithm:** RSA 2048-bit
-- **Created:** 2026-03-16
-
-**Hidden notation found in key signature:**
-```
-notation: manu=2,2.5+1.12,0,3
-```
-This is an embedded metadata field in the PGP key's self-signature. The name `manu` and value `2,2.5+1.12,0,3` are unusual. Possible interpretations:
-- "Manu" = Sanskrit for the first human/lawgiver
-- Could be coordinates, mathematical parameters, or encoded references
-- The `+` in `2.5+1.12` is odd - could mean 3.62, or could be two separate values
-- Remains undecoded
-
-### Phase 11: Subreddit Investigation
-
-**What we did:** Tried to access `r/impossibl` via:
-- WebFetch (`www.reddit.com/r/impossibl`) - blocked by tool
-- Reddit JSON API (`reddit.com/r/impossibl/.json`) - returned `{"reason": "banned", "message": "Not Found", "error": 404}`
-- Wayback Machine API - no archived snapshots exist
-- Web search for `r/impossibl` - no results
-
-**Result:** The subreddit is **banned**. No cached content exists anywhere. Whatever was posted there is gone.
-
-### Phase 12: invite_token Testing
-
-**What we did:** Tried using the token on various endpoints:
-- `GET /invite/{token}` - 404
-- `POST /api/invite` with token in body - 404
-- `GET /api/verify?token={token}` - 404
-- `GET /0/{token}` - 404
-- `Authorization: Bearer {token}` header on the API - returns same content as without it
-
-**Result:** No endpoint accepts the token. It may be for a different platform (Discord, Slack, etc.) or for a part of the puzzle we haven't found yet.
-
-### Phase 13: Rate Limiting Discovery
-
-**What we did:** Tried to POST to the API again with the token in the body.
-
-**What we got:** `{"error": "rate limit exceeded"}`
-
-**Implication:** The API tracks requests and limits how many times you can hit the POST endpoint. This is likely to prevent scraping or brute-forcing, or it could be part of the puzzle design (one-time-use access).
-
-### Phase 14: Additional Source Code Analysis
-
-**What we did:** Fetched and analyzed additional JS chunks from the root page (`/`) and the OG image.
-
-**Root page chunks:**
-- `3bb4040fec1a7de3.js` - Next.js framework internals (136KB, just boilerplate)
-- `d91ca5048c766b32.js` - Root page component with fancy particle/wave animations
-- No hidden API calls or puzzle content on the root page
-
-**OG image** (`impossibl.com/opengraph-image?6e2a084d8b3fd391`):
-- Simple PNG: white text "IMPOSSIBL." on black background
-- No steganographic content visible
-
-**CSS** (`32707f0cad99cf4d.css`, 50KB):
-- Standard Tailwind CSS output
-- No hidden content declarations
-
----
-
-## Inventory of Artifacts
-
-### Files in This Directory
-
-| File | Description |
-|------|-------------|
-| `INVESTIGATION.md` | This file - full investigation writeup |
-| `private_key.asc` | PGP private key extracted from the puzzle |
-
-### PGP Private Key Details
+### Phase 1.10: PGP Key Analysis
 
 | Field | Value |
 |-------|-------|
@@ -257,129 +103,325 @@ This is an embedded metadata field in the PGP key's self-signature. The name `ma
 | Algorithm | RSA 2048-bit |
 | Created | 2026-03-16 |
 | Hidden Notation | `manu=2,2.5+1.12,0,3` |
-| GPG Status | Imported to local keyring |
 
-### Tokens and Secrets
+The notation `manu=2,2.5+1.12,0,3` is embedded in the key's self-signature. Not referenced anywhere in the source code. Remains undecoded.
+
+### Phase 1.11: Subreddit Investigation
+
+`r/impossibl` returns `{"reason": "banned"}`. No Wayback Machine archive exists. The puzzle flow goes directly from the API to `/portal` without requiring Reddit access.
+
+### Phase 1.12: Portal Registration
+
+`impossibl.com/portal` — blank page with blinking cursor. Pasting the invite_token validates it against Supabase, assigns a builder number, generates `sha256(token).slice(0,16)` as a hash, and displays a registration form (name, email, phone, telegram, github).
+
+The event was full at time of registration. Response: "impossibl[0] is full. you're on the list. impossibl[1] awaits."
+
+### Phase 1.13: Organizer Identification
+
+Manav found `github.com/itsfabioroma/impossibl` (the complete source code) and messaged Fabio Roma on LinkedIn. Fabio confirmed: "It was a hackaton yesterday."
+
+---
+
+## Phase 2: Source Code Analysis (Layers 8–11)
+
+The GitHub repo at `github.com/itsfabioroma/impossibl` reveals four additional systems beyond the main puzzle chain.
+
+### Layer 8: Hash Identity System (`/h` and `/h/[hash]`)
+
+After portal registration, each builder receives a SHA-256 hash (first 16 chars of their invite_token). The `/h` page provides a verification system.
+
+**Flow:**
+1. `impossibl.com/h` — terminal-style page: "enter your hash."
+2. Enter hash, press Enter
+3. POSTs to `/api/hash/verify` — iterates all tokens in Supabase, computes `sha256(invite_token).slice(0,16)` for each, finds the match
+4. If valid, redirects to `/h/[hash]` showing builder identity
+
+**Our result:**
+- Hash: `53f5f72a0f171443` (computed from `sha256("[REDACTED]")`)
+- API response: `{"status":"valid","hash":"53f5f72a0f171443","builderNumber":null,"name":null}`
+- Hash is valid but builder number is null (waitlisted, not a full builder)
+- The `/h/53f5f72a0f171443` page shows: "verified.", "impossibl[0][]", hash, "verified at impossibl[0]. san francisco, 24 mar 2025."
+
+### Layer 9: Project Submission (`/0/submit`)
+
+A hackathon project submission form.
+
+- Terminal-style page: "impossibl[0]" / "submit your project."
+- Two fields: project description (280 char max) + GitHub repo URL
+- POSTs to `/api/0/submit`, inserts into `impossibl_submissions` table
+- On success: "submitted. the judges will see it. good luck, builder."
+
+### Layer 10: Poster Location Map (`/map`)
+
+A password-protected Google Maps interface for tracking physical poster and sticker locations across SF. Appears to be an admin/internal tool.
+
+**5 poster/sticker variants:**
+
+| ID | Label | Color | Description |
+|----|-------|-------|-------------|
+| 1 | Cicada | Red (#FF4444) | Main puzzle poster |
+| 2 | Foguete | Blue (#44AAFF) | Portuguese for "rocket" |
+| 3 | High Line | Green (#44DD44) | — |
+| 4 | Find your way | Orange (#FFaa00) | — |
+| 5 | Sticker | Purple (#CC44FF) | — |
+
+**8 GPS coordinates from `data/pins.json`:**
+
+| # | Coordinates | Variant | Area |
+|---|-------------|---------|------|
+| 1 | 37.75626, -122.38701 | Cicada | SoMa, near Caltrain |
+| 2 | 37.75557, -122.38726 | Sticker | SoMa |
+| 3 | 37.77135, -122.43554 | Cicada | Haight-Ashbury / Cole Valley |
+| 4 | 37.77654, -122.42520 | High Line | Duboce Triangle |
+| 5 | 37.77655, -122.42468 | Cicada | Duboce Triangle |
+| 6 | 37.77663, -122.42436 | Sticker | Duboce Triangle |
+| 7 | 37.77642, -122.42437 | Cicada | Duboce Triangle |
+| 8 | 37.77623, -122.42479 | Cicada | Duboce Triangle |
+
+All pins created 2026-03-17. Map is password-protected via `MAP_PASSWORD` env var. Password not derivable from puzzle content.
+
+### Layer 11: Dasha's Second Brain (`/dasha` + `/api/chat`)
+
+A two-part system unrelated to the puzzle chain, built as a personal project for Dasha Shunina (host of "Talks With Dasha" podcast, founder of Women Tech Meetup, Forbes contributor).
+
+**Part A: The Dasha page (`/dasha`)**
+
+An animated scroll experience addressed to Dasha Shunina (Дарья). Sequence includes:
+- "Dasha." → "Or should I say Дарья?" → "dear Москва friend,"
+- Rolling text acrostic spelling "YOU WANTED A SURPRISE"
+- Sections about people who built the impossible
+- Guest cards/photos from the podcast
+- Reveal: "I built something while watching your podcast. It knows everything you've ever said."
+- Links to the chatbot
+
+**Part B: The Chat API (`/api/chat`)**
+
+A Claude Opus-powered RAG chatbot serving as a searchable interface for the podcast.
+
+- Uses `@ai-sdk/anthropic` with `claude-opus-4-6`
+- Embeddings via OpenAI `text-embedding-3-small`
+- 11 podcast episodes transcribed and chunked in `data/transcripts/`
+- Retrieval: embeds user query, computes cosine similarity, returns relevant chunks
+- System prompt: "You are Dasha's second brain — the AI that knows everything about the 'Talks With Dasha' podcast."
+
+**Podcast episodes indexed:**
+1. From Living in a Closet to YC's Fastest Growing AI Startup
+2. Google Gemini AI — Peter Danenberg
+3. How Corgi's Founders Raised $108M to Reinvent Insurance
+4. Jeremiah Owyang — AI Influencer, Investor, Llama Lounge Host
+5. Max Marchione — Founder at Superpower
+6. Peter Walker — Head of Insights at Carta
+7. Raising $30M in 7 Days
+8. San Francisco is Back — But Only for AI Startups
+9. Sasha Orloff — Co-Founder/CEO of Puzzle
+10. This Founder Wants You to Stop Hiring Humans — Meet Jaspar, CEO of Artisan
+11. Why Ideas Don't Matter — According to a 2x YC Founder Turned Investor
+
+Built March 4-5, 2026. Co-authored with Claude (per commit messages).
+
+---
+
+## Phase 3: Git History Recovery (The Book Cipher)
+
+Analysis of the git commit history revealed an entire puzzle layer that was built and then removed on March 16, 2026 — the same day the puzzle system was finalized. This is the deepest and only unsolved component.
+
+### The Removed Manifesto (`manifesto.txt`)
+
+Recovered from commit `b0c6c5e` (parent of `1fc9589` "remove manifesto"). Full text:
+
+```
+Explanations. Great explanations.
+
+That's the engine of the future. The DNA of human progress.
+
+Unfortunately, before they're accepted by common sense, they get dismissed as impossible. Delusional.
+
+Why?
+
+Because they break the foundations of power.
+
+What happens when you manage to cheaply produce gold in your garage?
+
+Who owns the power now?
+
+That's why incumbents hate progress. When you subvert structures of control, it's irreversible. And they know it. That's the start of their downfall. And the beginning of infinity.
+
+That's why they suppress you.
+
+Until now.
+
+There are roughly 150 people that control the world today. They know the foundation of their power is fragile. They fear better explanations. Because better explanations force new power structures. And they are terrified of losing theirs.
+
+They are afraid of the impossible. We are not.
+
+We ship it.
+
+And we usually get ridiculed, punished and ostracized for it.
+
+There are others. Not many. If you're reading this, it's probably too late.
+
+Follow the inner light.
+
+Here is the genesis. Count as an engineer. Everything counts.
+
+https://ia601208.us.archive.org/24/items/TheFabricOfReality/The_Fabric_of_Reality.pdf
+
+(0, 0, 8)
+(12, 0, 42)
+(25, 1, 3)
+(38, 0, 10)
+(51, 0, 25)
+(63, 0, 7)
+(76, 0, 1)
+(89, 1, 0)
+(102, 0, 61)
+(114, 2, 17)
+(127, 0, 60)
+(140, 0, 25)
+(153, 1, 19)
+(151, 26, 9)
+(178, 0, 49)
+(191, 0, 9)
+(204, 0, 19)
+(216, 0, 6)
+(229, 0, 23)
+(242, 1, 23)
+```
+
+**Analysis:**
+- References David Deutsch's *The Fabric of Reality* (1997) and *The Beginning of Infinity* (2011) — both about epistemology and the nature of explanations
+- "Count as an engineer. Everything counts." = use 0-indexed counting
+- The 20 tuples are a **book cipher** — coordinates into the PDF
+- Format: **(page, paragraph, word)** — all 0-indexed
+- Decoding the 20 words from the PDF should produce a passphrase
+
+**Status: UNSOLVED.** The PDF at the archive.org URL needs to be downloaded and each of the 20 coordinates looked up manually.
+
+### The Removed `/$` Page (`app/$/page.tsx`)
+
+Recovered from commit `d166fd8` (parent of `d19f4b7` "remove /$ page").
+
+- Black screen with text input: "enter passphrase"
+- Submits to `POST /api/check-pass` with `{"pass": "input"}`
+- If correct → reveals: "The world you desired can be won. It exists, it is real, it is possible — it is yours."
+- If wrong → "access denied"
+
+The `/$` page is the lock. The book cipher is the key.
+
+### The Removed `/api/check-pass` Route
+
+Removed in commit `7543110` ("remove check-pass API route"). Source code not recovered — would require checking the parent commit. Likely compared input against an environment variable or hardcoded passphrase.
+
+### The Removed `/1` Page
+
+Removed in commit `2a29185` ("remove skiper28.bak and unused /1 page"). Contents not recovered.
+
+### Original vs. Simplified Puzzle Flow
+
+The original puzzle had an additional layer between the API and the portal:
+
+```
+SIMPLIFIED FLOW (current, after March 16 removals):
+POST /api/explanations → invite_token → /portal
+
+ORIGINAL FLOW (before March 16):
+POST /api/explanations → manifesto.txt (book cipher)
+→ decode passphrase from The Fabric of Reality PDF
+→ /$ (enter passphrase) → ??? → /portal
+```
+
+All removals occurred on March 16 in rapid succession:
+
+| Commit | Message | Removed |
+|--------|---------|---------|
+| `d19f4b7` | "remove /$ page" | `app/$/page.tsx` (passphrase entry) |
+| `7543110` | "remove check-pass API route" | `/api/check-pass` (passphrase verification) |
+| `2a29185` | "remove skiper28.bak and unused /1 page" | backup + `/1` page |
+| `1fc9589` | "remove manifesto" | `manifesto.txt` (book cipher) |
+| `d166fd8` | "remove John Galt from GET hint" | Modified API hint text |
+
+### Possible Connection to Map Password
+
+The passphrase derived from the book cipher could potentially be the map password (stored as `MAP_PASSWORD` env var). We tried ~40 guesses without success. The book cipher passphrase remains the most likely candidate.
+
+---
+
+## Complete URL Map
+
+### Active Pages
+
+| URL | Content |
+|-----|---------|
+| `impossibl.com` | Hackathon landing page |
+| `impossibl.com/0` | Puzzle entry: ASCII cicada + hidden API fetch |
+| `impossibl.com/0/0x7A5` | Honeypot page |
+| `impossibl.com/portal` | Token validation + registration |
+| `impossibl.com/0/submit` | Project submission form |
+| `impossibl.com/h` | Hash entry page |
+| `impossibl.com/h/{hash}` | Builder verification badge |
+| `impossibl.com/map` | Password-protected poster location map |
+| `impossibl.com/dasha` | Podcast AI chatbot landing |
+
+### Removed Pages (recovered from git history)
+
+| URL | Content | Removed in commit |
+|-----|---------|-------------------|
+| `impossibl.com/$` | Passphrase entry (book cipher lock) | `d19f4b7` |
+| `impossibl.com/1` | Unknown | `2a29185` |
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/0x6578706c616e6174696f6e73` | GET | Returns hex(base64(instruction)) |
+| `/api/0x6578706c616e6174696f6e73` | POST | Generates invite_token, stores in Supabase |
+| `/api/portal/validate` | POST | Validates invite_token |
+| `/api/portal/claim` | POST | Claims hackathon spot; sends email with Telegram link |
+| `/api/portal/waitlist` | POST | Waitlist when event is full |
+| `/api/0/submit` | POST | Submits hackathon project |
+| `/api/hash/verify` | POST | Verifies builder hash |
+| `/api/map/auth` | POST | Map page authentication |
+| `/api/map` | GET/POST | Pin CRUD for poster locations |
+| `/api/chat` | POST | Dasha podcast chatbot |
+| `/api/check-pass` | POST | Passphrase verification (REMOVED) |
+
+---
+
+## Artifacts
+
+### Files in This Repository
+
+| File | Description |
+|------|-------------|
+| `INVESTIGATION.md` | This file — full investigation log |
+| `REPORT.md` | Narrative report |
+| `OpenLetter.md` | Reflections on Cicada 3301 and the puzzle |
+| `WhatIfItWas.md` | Comparison with real Cicada 3301 criteria |
+| `REDDIT_POST.md` | Summary post |
+| `private_key.asc` | PGP private key extracted from the puzzle |
+| `photos/` | Physical poster, DevTools screenshots, LinkedIn chat |
+
+### Extracted Secrets
 
 | Item | Value |
 |------|-------|
 | invite_token | `[REDACTED]` |
-| Vercel Deployment ID | `dpl_3ariMhLmSNgBracZ3oF4juUdDJ4Z` |
-| Next.js Build ID | `gaWqbX9CM0xHB6-CNYiQ8` |
+| Builder hash | `53f5f72a0f171443` |
+| PGP Key Fingerprint | `750169CFCF2E0C8572789A60FAD6BE338F5A7FEB` |
+| PGP Key ID | `FAD6BE338F5A7FEB` |
+| PGP Key Notation | `manu=2,2.5+1.12,0,3` |
+| Hidden API | `/api/0x6578706c616e6174696f6e73` (hex for "explanations") |
 
-### URL Map
-
-| URL | HTTP | Content |
-|-----|------|---------|
-| `impossibl.com` | 200 | Hackathon landing: "Impossibl @ SF, March 24" |
-| `impossibl.com/0` | 200 | Puzzle entry: ASCII cicada + hidden JS comments + hidden API fetch |
-| `impossibl.com/0/0x7A5` | 200 | Honeypot: "Give up" + console taunts |
-| `impossibl.com/api/0x6578706c616e6174696f6e73` | 200 | Hidden API (GET=hex/b64 clue, POST=PGP key+subreddit+token) |
-| `impossibl.com/robots.txt` | 404 | - |
-| `impossibl.com/sitemap.xml` | 404 | - |
-| `impossibl.com/pgp` | 404 | - |
-| `impossibl.com/key` | 404 | - |
-| `impossibl.com/api` | 404 | - |
-| `impossibl.com/0/1` | 404 | - |
-| `impossibl.com/0/3301` | 404 | - |
-| `impossibl.com/0/0x1` | 404 | - |
-| `impossibl.com/0/0xCE5` | 404 | (0xCE5 = 3301 in hex) |
-| `impossibl.com/0/puzzle` | 404 | - |
-| `impossibl.com/0/motor` | 404 | - |
-| `impossibl.com/whoami` | 404 | - |
-| `impossibl.com/3301` | 404 | - |
-| `impossibl.com/1` | 404 | - |
-| `impossibl.com/apply` | 404 | - |
-| `impossibl.com/invite/{token}` | 404 | - |
-| `impossibl.com/api/invite` | 404 | - |
-| `impossibl.com/0/{token}` | 404 | - |
-
-### DNS Records
-
-| Type | Value |
-|------|-------|
-| A | 216.150.1.1 (Vercel) |
-| MX | Google Workspace (aspmx.l.google.com + alternates) |
-| TXT | `v=spf1 include:dc-aa8e722993._spfm.impossibl.com ~all` |
-| TXT | `google-site-verification=xpnfDog2ESWqkHp4wo4FtHmS5uWeReSamSPvigh1GtI` |
-
-### JS Source Files Analyzed
-
-| Chunk Hash | Page | Content Summary |
-|------------|------|-----------------|
-| `7180e2d3b3f57119` | `/0` | ASCII cicada art, DOM comment injector, hidden `fetch("/api/0x6578706c616e6174696f6e73")` call |
-| `03937afc6f801e3a` | `/0/0x7A5` | Honeypot page, console.log taunts |
-| `1574975e990fbf56` | shared | Next.js runtime, error handling, React 19.3.0-canary |
-| `7fb3a912a0ab3b90` | shared | Google Analytics, Vercel analytics |
-| `2f236954d6a65e12` | shared | Layout, routing, metadata boundaries |
-| `3bb4040fec1a7de3` | `/` | Next.js framework internals (136KB boilerplate) |
-| `d91ca5048c766b32` | `/` | Root page: particle/wave animations, sponsor links |
-
-### Technical Stack
+### Infrastructure
 
 | Component | Detail |
 |-----------|--------|
-| Framework | Next.js with React Server Components |
-| Bundler | Turbopack |
+| Domain | impossibl.com (GoDaddy, WHOIS privacy) |
 | Hosting | Vercel (SFO region) |
+| Framework | Next.js with React Server Components |
+| Database | Supabase |
 | SSL | Let's Encrypt (issued 2026-02-28) |
-| Fonts | Adelle Sans (18 weights), EB Garamond, JetBrains Mono |
-| Analytics | Google Analytics + Vercel Analytics |
-| Favicon | SVG, letter "i" in black rounded square |
-
-### Encoding Methods Encountered
-
-| Layer | Method | Example |
-|-------|--------|---------|
-| 1 | Hex encoding | `0x6578706c616e6174696f6e73` = "explanations" |
-| 2 | Hex -> Base64 double encoding | API GET response |
-| 3 | Base64 encoding | PGP key in data URI |
-| 4 | Client-side DOM injection | Comments inserted via `document.createComment()` |
-| 5 | PGP encryption | Private key provided for future decryption |
-| 6 | Hex in JSON values | `696D706F737369626C` = "impossibl" in `next` field |
-
-### Sponsors/Organizers
-
-| Entity | URL | Role |
-|--------|-----|------|
-| Impossibl | impossibl.com | Hackathon organizer |
-| Ultracontext | ultracontext.ai | Sponsor / primary organizer (AI company) |
-| Firecrawl | firecrawl.dev | Sponsor (web scraping company) |
-
-### Confirmed People
-
-| Name | Role | Source |
-|------|------|--------|
-| **Fabio Roma** | Founder @ UltraContext | LinkedIn conversation (confirmed via DM) |
-
-### Physical Poster Details
-
-- **Format:** White paper poster on a wooden utility pole
-- **Content:** Hand-drawn cicada/moth illustration (top) + QR code (bottom)
-- **QR code links to:** `https://impossibl.com/0`
-- **Location:** Near **310 Townsend St, San Francisco, CA** - adjacent to the **4th & King Caltrain station** in the SoMa district
-- **Spotted by:** Friend of investigator (Manav)
-- **Timing:** Poster was NOT present in the morning of March 25, appeared later that day (day AFTER the hackathon on March 24)
-- **Style:** Deliberately mimics the original Cicada 3301 posters from 2012 (hand-drawn cicada + QR code on white paper, posted on public infrastructure)
-
-### LinkedIn Confirmation (Phase 25)
-
-Manav messaged Fabio Roma (Founder @ UltraContext) directly on LinkedIn:
-
-- **Manav:** "Hi, did you put the cicada billboard outside the Caltrain station?"
-- **Fabio:** "Hey. How did you find me?"
-- **Manav:** "I went to the website and found you. I was just curious haha"
-- **Fabio:** "Still there?"
-- **Manav:** "I'm close by"
-- **Manav:** "What is this for?"
-- **Fabio:** "It was a hackaton yesterday"
-- **Manav:** "I see. That's unfortunate I just saw this"
-
-**Key observations from the conversation:**
-1. Fabio was surprised someone traced it back to him ("How did you find me?")
-2. He asked "Still there?" - suggesting the poster may be time-limited or he might want to show something in person
-3. He confirmed it was for the hackathon yesterday (March 24)
-4. He didn't deny or explain further - kept it brief and mysterious
+| DNS | GoDaddy nameservers, Google Workspace MX |
 
 ---
 
@@ -388,115 +430,29 @@ Manav messaged Fabio Roma (Founder @ UltraContext) directly on LinkedIn:
 | Date | Event |
 |------|-------|
 | 2026-02-28 | SSL certificate issued for impossibl.com |
-| 2026-03-16 | PGP key created (`impossibl[0]`) |
-| 2026-03-24 | Hackathon event: "Impossibl @ SF, March 24" |
-| 2026-03-25 morning | Poster NOT present at Caltrain station (per witness) |
-| 2026-03-25 ~4:58pm | Poster discovered near 310 Townsend / 4th & King Caltrain, SF |
-| 2026-03-25 ~4:58pm | Manav messages Fabio Roma (Founder @ UltraContext) on LinkedIn |
+| 2026-03-04–05 | Dasha page + chat API built (per commit history) |
+| 2026-03-13 | `/0` puzzle page created |
+| 2026-03-16 | PGP key created; cicada puzzle system built; portal created; book cipher layer (manifesto, `/$` page, check-pass API) built then removed same day |
+| 2026-03-17 | `/map` with Google Maps + poster pins created |
+| 2026-03-22 | Original home page restored |
+| 2026-03-23 | Waitlist system added |
+| 2026-03-24 | Impossibl hackathon takes place in San Francisco; `/h` hash verification pages created |
+| 2026-03-25 | `/0/submit` project submission form added |
+| 2026-03-25 ~4:58pm | Poster spotted near 4th & King Caltrain station |
+| 2026-03-25 ~4:58pm | Manav contacts Fabio Roma on LinkedIn |
 | 2026-03-25 ~5:04pm | Fabio confirms: "It was a hackaton yesterday" |
-| 2026-03-25 evening | Digital investigation begins; API cracked, PGP key extracted |
-| 2026-03-25 | r/impossibl found to be banned on Reddit |
-| 2026-03-25 | API rate-limited after initial POST |
-
-### Phase 15: Infrastructure Recon
-
-Standard reconnaissance: WHOIS (GoDaddy, privacy enabled), subdomains (only `www` exists), DNS (Google Workspace MX), HTTP methods (GET/HEAD/POST only per OPTIONS). No hidden infrastructure found.
-
-### Phase 16: Organizer Identification
-
-The root domain credits Ultracontext and Firecrawl as sponsors. Searching GitHub revealed:
-- **`github.com/ultracontext`** - the UltraContext org (created 2025-11-30, 171 stars on main repo)
-- **`github.com/itsfabioroma`** - Fabio Roma's personal account. Bio: "Founder @ ultracontext"
-- **`github.com/itsfabioroma/impossibl`** - THE ENTIRE SOURCE CODE of the puzzle site, public on GitHub
+| 2026-03-25 evening | Full puzzle chain solved; source code found on GitHub |
+| 2026-03-26 | Hash verification completed; Phase 2 source analysis |
 
 ---
 
-## Complete URL Map
+## Remaining Unknowns
 
-### Puzzle Chain (active pages)
-
-| URL | Content |
-|-----|---------|
-| `impossibl.com` | Hackathon landing: "Impossibl @ SF, March 24" |
-| `impossibl.com/0` | Puzzle entry: ASCII cicada + hidden API fetch in JS |
-| `impossibl.com/0/0x7A5` | Honeypot: "Give up" + console taunts |
-| `impossibl.com/api/0x6578706c616e6174696f6e73` | Hidden API (GET=encoded clue, POST=token+key) |
-| `impossibl.com/portal` | Token validation + hackathon registration form |
-| `impossibl.com/0/submit` | Hackathon project submission |
-| `impossibl.com/h` | Hash verification page |
-| `impossibl.com/h/{hash}` | Builder profile page |
-| `impossibl.com/map` | Password-protected poster location map |
-| `impossibl.com/dasha` | Unrelated podcast AI chatbot |
-
-### API Endpoints (from source code)
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/0x6578706c616e6174696f6e73` | GET | Returns hex(base64(instruction)) |
-| `/api/0x6578706c616e6174696f6e73` | POST | Generates invite_token, stores in Supabase |
-| `/api/portal/validate` | POST | Validates invite_token, returns builder number + hash |
-| `/api/portal/claim` | POST | Claims hackathon spot with personal info |
-| `/api/portal/waitlist` | POST | Waitlist when event is full |
-| `/api/0/submit` | POST | Submits hackathon project |
-| `/api/hash/verify` | POST | Verifies builder hash |
-| `/api/map/auth` | GET/POST | Map page authentication |
-| `/api/map` | GET/POST | Pin CRUD for poster locations |
-| `/api/chat` | POST | Dasha podcast chatbot (Claude + RAG) |
-
----
-
-## Phase 25: Source Code Discovery (github.com/itsfabioroma/impossibl)
-
-Fabio Roma's entire source code is public at `github.com/itsfabioroma/impossibl`. This revealed everything we missed.
-
-### The Token Goes to `/portal`
-
-We tried `/invite/{token}`, `/api/invite`, bearer auth, and a dozen other patterns but never tried `/portal`. The page shows a blank cursor. You paste your invite_token, it validates against Supabase, assigns you a builder number, generates `sha256(token).slice(0, 16)` as your hash, and plays a typewriter animation ending with a registration form (name, email, phone, telegram, github). That's the hackathon sign-up. That's what this whole thing was for.
-
-### Server-Side Logic
-
-- POST to the API extracts your IP + geo data, rate-limits at 3 per IP, generates a `randomUUID()`, stores it in a `impossibl_tokens` Supabase table
-- The PGP key is just an env var (`IMPOSSIBL_PGP_KEY`) served in the response. No encrypted messages exist to decrypt with it. It's decoration.
-- Portal validation does `sha256(token).slice(0, 16)` for your "hash"
-- When the event fills up: "impossibl[0] is full. you're on the list. impossibl[1] awaits."
-
-### Other Hidden Pages
-
-- **`/0/submit`** - Hackathon project submission (description + GitHub URL)
-- **`/h`** and **`/h/{hash}`** - Hash verification / builder profile pages
-- **`/map`** - Password-protected Google Maps tracking poster locations with 5 variants: Cicada (red), Foguete (blue), High Line (green), Find your way (orange), Sticker (purple). Multiple posters exist across SF.
-- **`/dasha`** - Unrelated AI chatbot for a podcast called "Talks With Dasha" using Claude + RAG
-- **`wasm/cicada.c`** - The WASM is just a wing-flap animation engine for the ASCII art. Written in freestanding C. Not a puzzle.
-
-### Resolved Questions
-
-| Question | Answer |
-|----------|--------|
-| Where does the invite_token go? | `/portal` - hackathon registration |
-| What does `[0]` mean? | Event number, not puzzle stages |
-| What's the WASM? | Wing animation, not a puzzle |
-| What's the PGP key for? | Decoration. An env var served in the response. |
-| What was on r/impossibl? | Unknown. The actual flow is poster → /0 → API → /portal. Reddit was likely secondary or a red herring. |
-
-### Still Unsolved
-
-1. **PGP key notation `manu=2,2.5+1.12,0,3`** - Not referenced anywhere in the source code. Still undecoded.
-2. **r/impossibl content** - Banned, no archive.
-3. **`pins.json`** - Exact locations of all poster variants across SF.
-
----
-
-## Authenticity Assessment
-
-**NOT real Cicada 3301.** Evidence:
-- No PGP-signed messages using the known Cicada 3301 key (fingerprint `7A35 090F 4BEB 2740 3EB9 1A26 3009 B10A E141 8876`)
-- The key we found (`FAD6BE338F5A7FEB`) is completely different from Cicada's
-- Hosted on Vercel (Cicada used Tor hidden services and raw HTML)
-- Directly connected to a commercial hackathon event with named sponsors
-- Domain registered recently (SSL from Feb 2026)
-- Original Cicada 3301 went dark in ~2014
-- Uses modern web tech (Next.js/React/Turbopack) vs Cicada's minimalist approach
-- Cicada always signed their messages cryptographically - this site has zero signed content
-- The PGP key is an environment variable. The "cryptography" is hex and base64. The entire thing is a sign-up funnel.
-
-**What it actually is:** A hackathon registration funnel wearing Cicada 3301's skin. The source code confirms it - the endpoint of the puzzle is a form asking for your name, email, and GitHub. Every layer of mystery exists to make you feel special about filling out a sign-up form.
+1. **Book cipher passphrase (UNSOLVED)** — 20 tuples from `manifesto.txt` need to be decoded against *The Fabric of Reality* PDF at `https://ia601208.us.archive.org/24/items/TheFabricOfReality/The_Fabric_of_Reality.pdf`. Format: (page, paragraph, word), 0-indexed. This is the deepest unsolved layer.
+2. **Map password** — stored as `MAP_PASSWORD` env var; possibly the decoded book cipher passphrase
+3. **PGP key notation `manu=2,2.5+1.12,0,3`** — not referenced anywhere in source code
+4. **r/impossibl content** — subreddit banned, no archive exists
+5. **`/api/check-pass` source** — removed in commit `7543110`; source not recovered
+6. **`/1` page contents** — removed in commit `2a29185`; not recovered
+7. **impossibl[1]** — second event referenced in waitlist message
+8. **Telegram group** — `https://t.me/+yxI9zUYC8CMwN2Nh` (from portal claim confirmation email); not explored
