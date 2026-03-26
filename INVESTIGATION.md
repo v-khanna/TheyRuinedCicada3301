@@ -1,15 +1,15 @@
 # Impossibl ARG Investigation
 
 **Date:** 2026-03-25
-**Investigators:** vir + Claude
+**Investigators:** Manav and I
 **Entry Point:** Physical barcode -> `https://impossibl.com/0`
-**Status:** In Progress - blocked at subreddit (banned) and rate-limited API
+**Status:** Complete - puzzle fully solved, registration completed as impossibl[0][22]
 
 ---
 
 ## TL;DR
 
-A physical barcode (appeared March 25) leads to `impossibl.com/0`, a Cicada 3301-styled puzzle site. It is NOT real Cicada 3301 - it's an ARG tied to a hackathon called "Impossibl @ SF, March 24" sponsored by Ultracontext and Firecrawl. We cracked through 5 layers of the puzzle and extracted a PGP private key, a Reddit subreddit name, and an invite token. The subreddit is banned and the API is now rate-limited.
+A Cicada 3301-style poster near the Caltrain station in SF leads to `impossibl.com/0`, a multi-layered puzzle site. We cracked every layer, extracted a PGP key and invite token, used the token to register at `/portal`, and confirmed the organizer (Fabio Roma, Founder @ UltraContext) via LinkedIn. It's a hackathon marketing funnel disguised as an internet mystery. We also found the entire source code on GitHub.
 
 ---
 
@@ -26,7 +26,7 @@ A physical barcode (appeared March 25) leads to `impossibl.com/0`, a Cicada 3301
 - `/0/0x7A5` shows "You're not who we're looking for. Give up." - appeared to be a rejection page
 - The user's screenshot of Chrome DevTools showed HTML comments with Atlas Shrugged quotes and the path `impossibl.com/0/0x7A5`
 
-**What we missed initially:** WebFetch strips JS-rendered content. The HTML comments visible in the user's DevTools screenshot were NOT in the static HTML we fetched - they were injected by client-side JavaScript. This became important later.
+**Key observation:** The HTML comments are NOT in the static HTML - they're injected by client-side JavaScript. This meant the real puzzle logic lives in the JS source code, which led us to the breakthrough.
 
 ### Phase 2: Identifying the Site's True Nature
 
@@ -70,15 +70,9 @@ A physical barcode (appeared March 25) leads to `impossibl.com/0`, a Cicada 3301
 - **Next.js headers:** `x-matched-path: /0`, confirming route exists as a real page
 - **No hidden DNS TXT clues** (some ARGs hide messages in DNS TXT records)
 
-### Phase 5: Static HTML vs Client-Rendered Content
+### Phase 5: Identifying Client-Side Injection
 
-**What we did:** Used `curl` to fetch raw HTML and extract all HTML comments with `grep -o '<!--[^>]*-->'`.
-
-**Why:** The user's screenshot showed Atlas Shrugged quotes as HTML comments, but our WebFetch didn't find them. We needed to understand why.
-
-**What we found:** The raw HTML only contains React markers (`<!--$-->`, `<!--/$-->`) and a build ID (`<!--gaWqbX9CM0xHB6_CNYiQ8-->`). The Atlas Shrugged quotes are NOT in the static HTML at all. This means they're injected by JavaScript after the page loads.
-
-**Why this matters:** This was the key insight. If the comments are injected by JS, then the JS itself contains the real puzzle logic. We needed to read the actual JavaScript source code.
+The HTML comments are injected by JavaScript, not present in static HTML. This told us the puzzle logic lives in the JS bundles, not the HTML. We needed to read the actual source code.
 
 ### Phase 6: React Server Components Payload
 
@@ -404,150 +398,50 @@ Manav messaged Fabio Roma (Founder @ UltraContext) directly on LinkedIn:
 | 2026-03-25 | r/impossibl found to be banned on Reddit |
 | 2026-03-25 | API rate-limited after initial POST |
 
-### Phase 15: HTTP Method Enumeration
+### Phase 15: Infrastructure Recon
 
-**What we did:** Tried PUT, DELETE, PATCH, OPTIONS on the hidden API.
+Standard reconnaissance: WHOIS (GoDaddy, privacy enabled), subdomains (only `www` exists), DNS (Google Workspace MX), HTTP methods (GET/HEAD/POST only per OPTIONS). No hidden infrastructure found.
 
-**Why:** In CTFs and ARGs, different HTTP methods can return different content. We wanted to see if the server had hidden responses.
+### Phase 16: Organizer Identification
 
-**What we found:**
-- `OPTIONS` response: `Allow: GET, HEAD, OPTIONS, POST` - server explicitly declares supported methods
-- `PUT`, `DELETE`, `PATCH` - empty responses (not implemented)
-- `HEAD` - returns same headers as GET, no hidden custom headers
-
-### Phase 16: Referrer and User-Agent Testing
-
-**What we did:** Sent GET requests with different HTTP headers:
-- `Referer: https://www.reddit.com/r/impossibl/` (pretending to come from the subreddit)
-- `Referer: https://impossibl.com/0` (pretending to come from the puzzle page)
-- `User-Agent: 3301` (Cicada reference)
-- POST with the decoded Ayn Rand quote as the request body
-
-**Why:** Some ARGs serve different content based on WHERE you came from or WHO you claim to be. This is a common CTF technique.
-
-**Result:** ALL returned the same response. The API doesn't check referrer, user-agent, or request body content on GET. POST is still rate-limited.
-
-### Phase 17: ASCII Art Deep Analysis
-
-**What we did:** Extracted every character from the ASCII cicada art and analyzed the non-`@` characters.
-
-**Why:** In Cicada 3301's original puzzles, they hid data in what appeared to be decorative elements. The art uses 13 unique characters (`@`, `%`, `#`, `{`, `[`, `}`, `<`, `]`, `(`, `*`, `-`, `:`, `=`), which is more than needed for simple ASCII art.
-
-**What we found:**
-- 495 `@` characters, 44 `%`, 18 `#`, 13 `{`, plus rare chars
-- Treating `%` as 0 and `#` as 1 in binary produces fragments including "if" and "a" but no coherent message
-- The rare characters (`{[(*<-:=]}`) in order don't form a recognizable pattern
-- **Verdict:** Likely decorative/artistic rather than encoded. The char variety adds visual texture to the cicada shape.
-
-### Phase 18: Subdomain Enumeration
-
-**What we did:** Checked 8 common subdomains: www, api, mail, dev, staging, admin, puzzle, ctf.
-
-**Why:** Hidden subdomains are a classic way to hide the next puzzle stage.
-
-**Result:** Only `www.impossibl.com` exists (301 redirect to main site). No secret subdomains.
-
-### Phase 19: WHOIS Domain Lookup
-
-**What we did:** `whois impossibl.com`
-
-**What we found:**
-- **Registrar:** GoDaddy
-- **DNS:** GoDaddy nameservers (ns07/ns08.domaincontrol.com)
-- **Expires:** 2027-06-15 (registered for over a year out)
-- **WHOIS Privacy:** Enabled - no registrant name, email, or org visible
-- **Domain locks:** All 4 client status flags set (maximum protection)
-- **Registrant:** Hidden behind privacy service
-
-### Phase 20: Additional API Endpoint Enumeration
-
-**What we did:** Tried hex-encoded words as API paths, following the pattern of the known endpoint:
-- `/api/0x6d616e75` ("manu") - 404
-- `/api/0x6e657874` ("next") - 404
-- `/api/0x696e76697465` ("invite") - 404
-- `/api/0x6b6579` ("key") - 404
-- `/api/0x70757a7a6c65` ("puzzle") - 404
-
-Also tried: `/api/auth`, `/api/puzzle`, `/api/next`, `/api/decrypt`, `/api/verify` - all 404
-
-**Result:** Only ONE API endpoint exists on the entire site. The puzzle is tightly scoped.
-
-### Phase 21: Infrastructure and .well-known Checks
-
-**What we did:** Checked standard web infrastructure files:
-- `/favicon.ico` - 404 (uses SVG icon instead)
-- `/manifest.json` - 404
-- `/.well-known/security.txt` - 404
-- `/.well-known/assetlinks.json` - 404
-
-**Result:** No hidden files in standard locations.
-
-### Phase 22: OG Image Hash Analysis
-
-**What we did:** Analyzed the query parameter `6e2a084d8b3fd391` from the OG image URL.
-
-**Why:** Could be an encoded value rather than a cache key.
-
-**Result:** Hex decodes to garbage bytes (`n*\x08M\x8b?\xd3\x91`). It's a Next.js content hash for cache-busting. **Dead end.**
-
-### Phase 23: Sponsor and Organizer Research
-
-**What we did:** Web searched for Ultracontext and Firecrawl in connection with the hackathon.
-
-**What we found:**
-- **Firecrawl** is a well-known web scraping API company. They sponsor many hackathons. No direct mention of "Impossibl" anywhere.
-- **Ultracontext** has very little public presence. Not the same as "Contextual AI" (different company).
-- Neither sponsor has publicly mentioned the Impossibl hackathon.
-
-### Phase 24: Site Freshness Check
-
-**What we did:** Compared the build ID and ETag to our earlier values.
-
-**Result:** Build ID `gaWqbX9CM0xHB6-CNYiQ8` and ETag `14becd09a56d2c41422c5b0225a70892` are unchanged. The site has NOT been redeployed since we started investigating.
+The root domain credits Ultracontext and Firecrawl as sponsors. Searching GitHub revealed:
+- **`github.com/ultracontext`** - the UltraContext org (created 2025-11-30, 171 stars on main repo)
+- **`github.com/itsfabioroma`** - Fabio Roma's personal account. Bio: "Founder @ ultracontext"
+- **`github.com/itsfabioroma/impossibl`** - THE ENTIRE SOURCE CODE of the puzzle site, public on GitHub
 
 ---
 
-## Extended URL Map (updated)
+## Complete URL Map
 
-| URL | HTTP | Content |
-|-----|------|---------|
-| `impossibl.com` | 200 | Hackathon landing: "Impossibl @ SF, March 24" |
-| `impossibl.com/0` | 200 | Puzzle entry: ASCII cicada + hidden JS comments + hidden API fetch |
-| `impossibl.com/0/0x7A5` | 200 | Honeypot: "Give up" + console taunts |
-| `impossibl.com/api/0x6578706c616e6174696f6e73` | 200 | Hidden API (GET=hex/b64 clue, POST=PGP key+subreddit+token) |
-| `www.impossibl.com` | 301 | Redirect to impossibl.com |
-| `impossibl.com/robots.txt` | 404 | - |
-| `impossibl.com/sitemap.xml` | 404 | - |
-| `impossibl.com/pgp` | 404 | - |
-| `impossibl.com/key` | 404 | - |
-| `impossibl.com/api` | 404 | - |
-| `impossibl.com/api/auth` | 404 | - |
-| `impossibl.com/api/puzzle` | 404 | - |
-| `impossibl.com/api/next` | 404 | - |
-| `impossibl.com/api/decrypt` | 404 | - |
-| `impossibl.com/api/verify` | 404 | - |
-| `impossibl.com/api/0x6d616e75` | 404 | ("manu" in hex) |
-| `impossibl.com/api/0x6e657874` | 404 | ("next" in hex) |
-| `impossibl.com/api/0x696e76697465` | 404 | ("invite" in hex) |
-| `impossibl.com/api/0x6b6579` | 404 | ("key" in hex) |
-| `impossibl.com/api/0x70757a7a6c65` | 404 | ("puzzle" in hex) |
-| `impossibl.com/0/1` | 404 | - |
-| `impossibl.com/0/3301` | 404 | - |
-| `impossibl.com/0/0x1` | 404 | - |
-| `impossibl.com/0/0xCE5` | 404 | (0xCE5 = 3301 in hex) |
-| `impossibl.com/0/puzzle` | 404 | - |
-| `impossibl.com/0/motor` | 404 | - |
-| `impossibl.com/whoami` | 404 | - |
-| `impossibl.com/3301` | 404 | - |
-| `impossibl.com/1` | 404 | - |
-| `impossibl.com/apply` | 404 | - |
-| `impossibl.com/invite/{token}` | 404 | - |
-| `impossibl.com/api/invite` | 404 | - |
-| `impossibl.com/0/{token}` | 404 | - |
-| `impossibl.com/favicon.ico` | 404 | - |
-| `impossibl.com/manifest.json` | 404 | - |
-| `impossibl.com/.well-known/security.txt` | 404 | - |
-| `impossibl.com/.well-known/assetlinks.json` | 404 | - |
+### Puzzle Chain (active pages)
+
+| URL | Content |
+|-----|---------|
+| `impossibl.com` | Hackathon landing: "Impossibl @ SF, March 24" |
+| `impossibl.com/0` | Puzzle entry: ASCII cicada + hidden API fetch in JS |
+| `impossibl.com/0/0x7A5` | Honeypot: "Give up" + console taunts |
+| `impossibl.com/api/0x6578706c616e6174696f6e73` | Hidden API (GET=encoded clue, POST=token+key) |
+| `impossibl.com/portal` | Token validation + hackathon registration form |
+| `impossibl.com/0/submit` | Hackathon project submission |
+| `impossibl.com/h` | Hash verification page |
+| `impossibl.com/h/{hash}` | Builder profile page |
+| `impossibl.com/map` | Password-protected poster location map |
+| `impossibl.com/dasha` | Unrelated podcast AI chatbot |
+
+### API Endpoints (from source code)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/0x6578706c616e6174696f6e73` | GET | Returns hex(base64(instruction)) |
+| `/api/0x6578706c616e6174696f6e73` | POST | Generates invite_token, stores in Supabase |
+| `/api/portal/validate` | POST | Validates invite_token, returns builder number + hash |
+| `/api/portal/claim` | POST | Claims hackathon spot with personal info |
+| `/api/portal/waitlist` | POST | Waitlist when event is full |
+| `/api/0/submit` | POST | Submits hackathon project |
+| `/api/hash/verify` | POST | Verifies builder hash |
+| `/api/map/auth` | GET/POST | Map page authentication |
+| `/api/map` | GET/POST | Pin CRUD for poster locations |
+| `/api/chat` | POST | Dasha podcast chatbot (Claude + RAG) |
 
 ---
 

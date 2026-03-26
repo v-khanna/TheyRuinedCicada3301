@@ -120,27 +120,42 @@ Sending a POST request to the same endpoint returns a much larger JSON response 
 
 `**next`** - The prefix `r/` followed by hex-encoded text. `696D706F737369626C` decodes to `impossibl`. The next step is the Reddit subreddit **r/impossibl**.
 
-`**invite_token`** - A UUID: `[REDACTED]`. Its purpose is unknown - no endpoint on the site accepts it. It may have been for accessing a gated resource (Discord, the subreddit itself, or something else).
+`**invite_token`** - A UUID. This is the key to the next step: pasting it into `/portal` to register for the hackathon.
 
-`**decrypt_key`** - A full PGP private key encoded as a Base64 data URI. Decoded, it's a 2048-bit RSA key pair:
+`**decrypt_key`** - A PGP private key encoded as a Base64 data URI. Turns out to be decorative - the source code confirms it's just an environment variable served in the response. No encrypted messages exist to decrypt with it.
+
+The `r/impossibl` subreddit pointer is a red herring or secondary channel - the actual puzzle flow goes directly from the API to `/portal`.
+
+### Layer 6: The Portal (`/portal`)
+
+Navigating to `impossibl.com/portal` shows a blank black page with a blinking cursor. Pasting the invite_token validates it against a Supabase database, assigns a builder number, generates a SHA-256 hash (first 16 chars) of the token, and plays a typewriter animation:
 
 ```
-User ID:     impossibl[0] <0@impossibl.com>
-Fingerprint: 750169CFCF2E0C8572789A60FAD6BE338F5A7FEB
-Created:     2026-03-16
+you're in.
+congratulations, you're impossibl[0][22]
+
+this is your hash: [REDACTED]
+save it. you will never see it again.
+
+time to meet the others.
+the sharpest minds in the world. united.
+one day. one house. one goal.
+to ship the impossible.
+
+impossibl[0]
+hackathon. san francisco. march 24.
+claim your spot below. details will follow.
 ```
 
-The `[0]` in the user ID implies this is key zero of potentially multiple keys for different puzzle stages. The key also contains a hidden metadata notation in its self-signature: `manu=2,2.5+1.12,0,3` - the meaning of which remains undecoded.
+Then a registration form appears: name, email, phone, telegram, github. That's it. That's what the entire puzzle was building to. A sign-up form.
 
-This is where the digital trail goes cold. The subreddit **r/impossibl** has been banned by Reddit. No cached or archived version exists. Whatever was posted there - likely PGP-encrypted messages intended to be decrypted with this key - is gone.
-
-The API also rate-limits after the first POST, returning `{"error": "rate limit exceeded"}` on subsequent attempts.
+We completed registration as **impossibl[0][22]** - the 22nd person to solve the puzzle chain.
 
 ---
 
 ## The Person Behind It
 
-While the digital investigation hit a dead end at the banned subreddit, the social investigation took a more direct path.
+The root domain credits Ultracontext and Firecrawl as sponsors. We also found the entire source code on GitHub at `github.com/itsfabioroma/impossibl`.
 
 The root domain `impossibl.com` (without `/0`) reveals it's a hackathon: "Impossibl @ SF, March 24". The page credits two sponsors: **Ultracontext** (ultracontext.ai) and **Firecrawl** (firecrawl.dev).
 
@@ -219,19 +234,25 @@ LAYER 5 - ENCODED MESSAGE
 LAYER 6 - THE PAYLOAD
     |
     v
-[Response: PGP private key + r/impossibl + invite_token]
+[Response: PGP private key (decoration) + r/impossibl (red herring) + invite_token]
     |
-    |---> r/impossibl is BANNED (dead end)
-    |---> invite_token has no known endpoint
-    |---> PGP key contains hidden notation: manu=2,2.5+1.12,0,3
-    |
-    v (???)
+    v (navigate to /portal, paste the token)
 
-LAYER 7 - UNKNOWN
+LAYER 7 - THE PORTAL
     |
     v
-[Presumably: decrypt PGP-encrypted messages on r/impossibl]
-[But the subreddit is gone, so this path is severed]
+[/portal - blank cursor, paste invite_token]
+[Validates against Supabase, assigns builder number + SHA-256 hash]
+["you're in. congratulations, you're impossibl[0][22]"]
+    |
+    v (fill out registration form)
+
+LAYER 8 - REGISTRATION (THE REAL ENDPOINT)
+    |
+    v
+[Name, email, phone, telegram, github → hackathon sign-up]
+["impossibl[0][22] confirmed. check your inbox."]
+
 ```
 
 ---
@@ -259,16 +280,17 @@ LAYER 7 - UNKNOWN
 ### Files in This Repository
 
 
-| File                         | Description                                             |
-| ---------------------------- | ------------------------------------------------------- |
-| `REPORT.md`                  | This file - clean narrative report                      |
-| `INVESTIGATION.md`           | Raw investigation log with all 25 phases of methodology |
-| `private_key.asc`            | PGP private key extracted from the puzzle               |
-| `photos/poster.jpg`          | Physical poster near Caltrain station                   |
-| `photos/linkedin-chat-1.jpg` | LinkedIn DM with Fabio Roma (part 1)                    |
-| `photos/linkedin-chat-2.jpg` | LinkedIn DM with Fabio Roma (part 2)                    |
-| `photos/honeypot-page.png`   | Screenshot of the honeypot page                         |
-| `photos/devtools-source.png` | Chrome DevTools showing injected HTML comments          |
+| File | Description |
+|------|-------------|
+| `REPORT.md` | This file - clean narrative report |
+| `INVESTIGATION.md` | Raw investigation log with methodology |
+| `private_key.asc` | PGP private key extracted from the puzzle |
+| `photos/cicada3301poster.jpeg` | Physical poster near Caltrain station |
+| `photos/devtoolssourcecicada3301.jpeg` | Chrome DevTools showing injected HTML comments |
+| `photos/honeypot-page.jpeg` | Screenshot of the honeypot page |
+| `photos/Cicada3301posterchatwithfounderultracontext1.jpeg` | LinkedIn DM with Fabio Roma (part 1) |
+| `photos/Cicada3301posterchatwithfounderultracontext2.jpeg` | LinkedIn DM with Fabio Roma (part 2) |
+| `photos/ScreenshotCensored.png` | Portal registration completed (personal info redacted) |
 
 
 ### Extracted Secrets
@@ -313,19 +335,18 @@ LAYER 7 - UNKNOWN
 | 2026-03-25 ~4:58pm | Manav contacts Fabio Roma on LinkedIn                 |
 | 2026-03-25 ~5:04pm | Fabio confirms: "It was a hackaton yesterday"                |
 | 2026-03-25 evening | Full digital investigation conducted                         |
+| 2026-03-25 evening | Source code found on GitHub (github.com/itsfabioroma/impossibl) |
+| 2026-03-25 evening | Portal completed - registered as impossibl[0][22]             |
 
 
-Note: The poster may have been placed on March 24 (day of hackathon) and only noticed on March 25. An earlier witness report that it wasn't there in the morning may simply mean it wasn't noticed.
+Note: The poster may have been placed on March 24 (day of hackathon) and only noticed on March 25.
 
 ---
 
-## Unsolved Elements
+## Remaining Unknowns
 
-1. **PGP key notation `manu=2,2.5+1.12,0,3`** - Deliberately embedded metadata in the key's self-signature. Meaning unknown.
-2. **The `[0]` in the key's user ID** - Implies a series of keys (`[1]`, `[2]`, etc.) for progressive puzzle stages.
-3. **invite_token purpose** - No endpoint on the site accepts it. May be for a different platform.
-4. **r/impossibl content** - The subreddit was banned. Whatever PGP-encrypted messages were posted there are lost.
-5. **Fabio's "Still there?"** - Was there a physical/in-person component at the poster location?
+1. **PGP key notation `manu=2,2.5+1.12,0,3`** - Embedded in the key signature, not referenced anywhere in the source code.
+2. **r/impossibl content** - The subreddit was banned. The puzzle flow doesn't require it (goes straight to `/portal`), so it may have been a secondary channel.
 
 ---
 

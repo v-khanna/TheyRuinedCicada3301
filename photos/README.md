@@ -25,3 +25,8 @@ Evidence collected during the investigation on March 25, 2026.
 5. **`Cicada3301posterchatwithfounderultracontext2.jpeg`** - LinkedIn DMs (part 2)
    - Fabio confirms: "It was a hackaton yesterday"
    - The whole thing reduced to a one-line admission
+
+6. **`ScreenshotCensored.png`** - The /portal page after successfully using the invite_token
+   - Shows: "you're in. congratulations, you're impossibl[0][22]"
+   - Hash and personal details censored
+   - Proof that the entire puzzle chain was completed end to end
