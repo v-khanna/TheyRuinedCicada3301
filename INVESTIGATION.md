@@ -376,7 +376,7 @@ The passphrase derived from the book cipher could potentially be the map passwor
 | `/api/0x6578706c616e6174696f6e73` | GET | Returns hex(base64(instruction)) |
 | `/api/0x6578706c616e6174696f6e73` | POST | Generates invite_token, stores in Supabase |
 | `/api/portal/validate` | POST | Validates invite_token |
-| `/api/portal/claim` | POST | Claims hackathon spot; sends email with Telegram link |
+| `/api/portal/claim` | POST | Claims hackathon spot; sends confirmation email |
 | `/api/portal/waitlist` | POST | Waitlist when event is full |
 | `/api/0/submit` | POST | Submits hackathon project |
 | `/api/hash/verify` | POST | Verifies builder hash |
@@ -455,4 +455,4 @@ The passphrase derived from the book cipher could potentially be the map passwor
 5. **`/api/check-pass` source** — removed in commit `7543110`; source not recovered
 6. **`/1` page contents** — removed in commit `2a29185`; not recovered
 7. **impossibl[1]** — second event referenced in waitlist message
-8. **Telegram group** — `https://t.me/+yxI9zUYC8CMwN2Nh` (from portal claim confirmation email); not explored
+8. **Telegram group** — invite link exists (from portal claim email); not explored

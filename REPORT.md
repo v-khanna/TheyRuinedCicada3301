@@ -333,4 +333,4 @@ DASHA'S SECOND BRAIN (/dasha + /api/chat)
 5. **`/api/check-pass` source** — removed; not recovered from git
 6. **`/1` page contents** — removed; not recovered
 7. **impossibl[1]** — second event referenced in waitlist message
-8. **Telegram group** — `https://t.me/+yxI9zUYC8CMwN2Nh` (from portal claim email); not explored
+8. **Telegram group** — invite link exists (from portal claim email); not explored
